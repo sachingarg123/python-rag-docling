@@ -20,6 +20,28 @@ from qdrant_client.models import (
     Filter, FieldCondition, MatchValue,
 )
 from groq import Groq
+from datasets import Dataset
+from ragas import evaluate
+from langchain_groq import ChatGroq
+from ragas.llms import LangchainLLMWrapper
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from langchain_community.embeddings import HuggingFaceBgeEmbeddings
+
+from ragas.metrics.collections import (
+    AnswerCorrectness,
+    AnswerRelevancy,
+    Faithfulness,
+    ContextPrecision,
+    ContextRecall,
+)
+
+from ragas.metrics import (
+    answer_correctness,
+    answer_relevancy,
+    faithfulness,
+    context_precision,
+    context_recall,
+)
 
 # Load .env from the same folder as this script to avoid CWD-dependent behavior.
 ENV_PATH = Path(__file__).resolve().parent / ".env"
@@ -185,6 +207,18 @@ if not api_key:
 groq_client = Groq(api_key=api_key)
 GROQ_MODEL  = "openai/gpt-oss-safeguard-20b"
 
+def generate_answer(question: str, context: str) -> str:
+    """Generate an answer based on context."""
+    response = groq_client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"},
+        ],
+        temperature=0.2,
+    )
+    return response.choices[0].message.content.strip()
+
 def rag(query: str, top_k: int = 5):
     """
     End-to-end RAG pipeline:
@@ -201,19 +235,107 @@ def rag(query: str, top_k: int = 5):
     context = build_context(chunks)
 
     # Step 3 — Generate
-    user_message = f"Context:\n{context}\n\nQuestion: {query}"
-
-    response = groq_client.chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user",   "content": user_message},
-        ],
-        temperature=0.2,   # Low = factual;  High = creative
-    )
-    return response.choices[0].message.content, context
+    answer = generate_answer(query, context)
+    return answer,context
 
 answer, context = rag("How many casual leaves am I entitled to?")
 print(answer)
 print(f"{250*'='}")
 print(f"\n\nSOURCES:\n {context}")
+
+
+
+# sample questions
+questions = [
+    "What types of leaves are available to employees?",
+    "How many casual leaves are employees entitled to per year?",
+    "What is the maternity leave policy at AtliQ?",
+    "What is the paternity leave entitlement?",
+    "How much paid leave do employees get for medical emergencies?",
+    "What is the process for applying for leave?",
+    "What happens if an employee exceeds their casual leave limit?",
+    "Are there any restrictions on when leaves can be taken?",
+    "What is the notice period required for leave applications?",
+    "What is the work-from-home policy at AtliQ?",
+]
+
+# Expected responses
+ground_truths = [
+    "AtliQ offers multiple types of leaves including casual leave, sick leave, maternity leave, paternity leave, bereavement leave, and medical emergency leave.",
+    "Employees are entitled to 12 casual leaves per calendar year, which do not carry forward to the next year.",
+    "Eligible female employees are entitled to 6 months (180 days) of paid maternity leave, with an option to extend unpaid leave.",
+    "Male employees are entitled to 15 days of paid paternity leave within 6 months of the child's birth.",
+    "Employees can take up to 5 days of paid leave for medical emergencies with proper documentation from a registered medical practitioner.",
+    "Employees must submit leave applications through the HR portal at least 5 business days in advance, or immediately in case of emergencies.",
+    "Casual leaves exceeding the annual limit require prior approval from the department manager and may result in leave without pay or salary deduction.",
+    "Leaves cannot be taken during critical project deadlines or company events without manager approval. Annual leaves should be planned in advance.",
+    "Standard notice period is 5 business days for planned leaves and immediate notification for emergency leaves with post-approval.",
+    "AtliQ allows eligible employees to work from home up to 3 days per week with manager approval. Remote work requires prior arrangement and stable internet connectivity.",
+]
+
+rows = []
+
+for question, ground_truth in zip(questions, ground_truths):
+    print(f"Processing: {question}")
+
+    # Retrieve relevant chunks
+    retrieved_chunks = retrieve(question, top_k=5)
+    contexts = [chunk["content"] for chunk in retrieved_chunks]
+
+    # Generate answer
+    answer = generate_answer(question, "\n\n---\n\n".join(contexts))
+
+    # Store in format required by RAGAS
+    rows.append({
+        "question": question,
+        "contexts": contexts,
+        "answer": answer,
+        "ground_truth": ground_truth,
+    })
+
+    evaluation_dataset = Dataset.from_list(rows)
+
+print(f"\nEvaluation dataset created with {len(evaluation_dataset)} samples")
+print("\nSample:")
+print(evaluation_dataset[0])
+
+
+ragas_llm = LangchainLLMWrapper(
+    ChatGroq(
+        model="llama-3.3-70b-versatile",   # any model at console.groq.com/docs
+        temperature=0,
+        api_key=os.environ.get("GROQ_API_KEY"),
+    )
+)
+
+ragas_emb = LangchainEmbeddingsWrapper(
+    HuggingFaceBgeEmbeddings(model_name="Qwen/Qwen3-Embedding-0.6B")
+)
+
+answer_correctness.llm = ragas_llm
+answer_correctness.embeddings = ragas_emb
+
+answer_relevancy.llm = ragas_llm
+answer_relevancy.embeddings = ragas_emb
+
+faithfulness.llm = ragas_llm
+faithfulness.embeddings = ragas_emb
+
+context_precision.llm = ragas_llm
+context_precision.embeddings = ragas_emb
+
+context_recall.llm = ragas_llm
+context_recall.embeddings = ragas_emb
+
+scores = evaluate(
+    evaluation_dataset,
+    metrics=[
+        answer_correctness,
+        answer_relevancy,
+        faithfulness,
+        context_precision,
+        context_recall,
+    ],
+    llm=ragas_llm,
+    embeddings=ragas_emb,
+)
