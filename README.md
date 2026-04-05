@@ -363,6 +363,9 @@ npm install
 ```
 
 #### 4. Environment Configuration
+
+⚠️ **IMPORTANT:** The `.env` file is **NOT included in the repository** for security reasons. You **MUST create it explicitly** before running the application.
+
 ```bash
 # Create .env file in project root
 cat > .env << EOF
@@ -370,6 +373,12 @@ GROQ_API_KEY=your_groq_api_key_here
 QDRANT_URL=http://localhost:6333
 EOF
 ```
+
+**Required Environment Variables:**
+- `GROQ_API_KEY` - Your Groq API key ([Get free API key](https://console.groq.com))
+- `QDRANT_URL` - URL to Qdrant vector database (default: `http://localhost:6333`)
+
+**Without the `.env` file, the application will fail to start with `RuntimeError: GROQ_API_KEY not found`**
 
 #### 5. Start Qdrant (using Docker)
 ```bash
@@ -833,6 +842,19 @@ docker run -p 6333:6333 qdrant/qdrant
 ```bash
 # Check .env file has correct GROQ_API_KEY
 cat .env | grep GROQ_API_KEY
+```
+
+**RuntimeError: GROQ_API_KEY not found** or **FileNotFoundError: .env**
+```bash
+# The .env file is NOT in the repository - you must create it!
+# Create it in the project root with:
+cat > .env << EOF
+GROQ_API_KEY=your_groq_api_key_here
+QDRANT_URL=http://localhost:6333
+EOF
+
+# Verify it was created
+ls -la .env
 ```
 
 ### Frontend Issues
