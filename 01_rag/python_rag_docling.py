@@ -159,26 +159,36 @@ print(f"Dimensions : {info.config.params.vectors.size}")
 # Retrieve the top-k most similar chunks for a given query.
 def retrieve(
     query: str,
-    top_k: int = 5
+    top_k: int = 10,
+    min_similarity_score: float = 0.5,
 ) -> list[dict]:
     """
     Embed the query and return the top-k most similar chunks.
 
     Args:
-        query          : User's question.
-        top_k          : Number of chunks to return.
-        section_filter : Optional H2 heading to restrict the search scope.
+        query                 : User's question.
+        top_k                 : Number of chunks to return (increased from 5 to 10).
+        min_similarity_score  : Minimum cosine similarity threshold (0.5 filters low-quality matches).
     """
     query_vector = embedder.encode(query).tolist()
 
+    # Fetch more candidates to filter by similarity score
     hits = client.query_points(
         collection_name=COLLECTION_NAME,
         query=query_vector,
-        limit=top_k,
+        limit=max(top_k * 2, 20),  # Fetch 2x to account for similarity filtering
         with_payload=True,
     )
 
-    return [{**hit.payload, "score": round(hit.score, 4)} for hit in hits.points]
+    # Filter by similarity threshold and return top_k
+    results = []
+    for hit in hits.points:
+        if hit.score >= min_similarity_score:  # Quality threshold
+            results.append({**hit.payload, "score": round(hit.score, 4)})
+            if len(results) >= top_k:
+                break
+    
+    return results
 
 
 results = retrieve("What is the leave policy?", top_k=3)

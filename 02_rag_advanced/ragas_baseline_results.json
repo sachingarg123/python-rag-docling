@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-04-05T16:40:04.458638",
+  "dataset_size": 5,
+  "num_eval_items": 5,
+  "variant": "full_pipeline",
+  "description": "Full pipeline with all components (guardrails, routing, LLM answer generation)",
+  "scores": {
+    "faithfulness": 0.2,
+    "answer_relevancy": NaN,
+    "context_precision": 0.3055555555319444,
+    "context_recall": 0.2962962962962963,
+    "answer_correctness": NaN
+  },
+  "component_stack": [
+    "Input Guardrails (off-topic, PII detection, rate limiting)",
+    "Semantic Routing (collection selection)",
+    "Qdrant Retrieval (with RBAC enforcement)",
+    "Answer Generation (fallback + LLM)",
+    "Output Guardrails (grounding checks, cross-role validation)"
+  ]
+}
