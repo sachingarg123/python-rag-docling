@@ -922,6 +922,10 @@ bash run_ragas_quick.sh full
 
 ## Demo & Evidence
 
+### Screen Recording
+
+- Full walkthrough: https://www.loom.com/share/68f3faa53b094452aa25c4355de0836c
+
 ### Verify RBAC Enforcement
 
 **Test Scenario:** Role-based access control prevents cross-role document leakage
