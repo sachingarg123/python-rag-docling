@@ -8,3 +8,20 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Node.js & Frontend build artifacts
+node_modules/
+.next/
+dist/
+build/
+*.node
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
